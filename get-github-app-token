@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Generate a GitHub App installation access token.
+# Usage: get-github-app-token <heartbeat|reviewer>
+#
+# Expects in $HEARTBEAT_HOME (or ~/claude/ by default):
+#   <name>-app.pem          — private key downloaded from the GitHub App settings
+#   <name>-app-id           — App ID (shown on the app's settings page)
+#   <name>-installation-id  — Installation ID (URL of org settings > installations > <id>)
+
+set -euo pipefail
+
+NAME="${1:?Usage: get-github-app-token <name>}"
+DIR="${HEARTBEAT_HOME:-$HOME/claude}"
+
+PEM="$DIR/${NAME}-app.pem"
+APP_ID="$(cat "$DIR/${NAME}-app-id")"
+INSTALLATION_ID="$(cat "$DIR/${NAME}-installation-id")"
+
+# Build a JWT signed with RS256.
+# Issued 60s in the past (clock skew tolerance), expires in 9 minutes.
+NOW=$(date +%s)
+IAT=$((NOW - 60))
+EXP=$((NOW + 540))
+
+HEADER=$(printf '{"alg":"RS256","typ":"JWT"}' | base64 -w0 | tr '+/' '-_' | tr -d '=')
+PAYLOAD=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$IAT" "$EXP" "$APP_ID" | base64 -w0 | tr '+/' '-_' | tr -d '=')
+SIG=$(printf '%s.%s' "$HEADER" "$PAYLOAD" \
+    | openssl dgst -sha256 -sign "$PEM" -binary \
+    | base64 -w0 | tr '+/' '-_' | tr -d '=')
+
+JWT="${HEADER}.${PAYLOAD}.${SIG}"
+
+# Exchange the JWT for a short-lived installation access token (1h TTL).
+curl -sf \
+    -X POST \
+    -H "Authorization: Bearer $JWT" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "https://api.github.com/app/installations/${INSTALLATION_ID}/access_tokens" \
+    | python3 -c "import sys, json; print(json.load(sys.stdin)['token'])"
