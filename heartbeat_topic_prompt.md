@@ -12,16 +12,24 @@ Read the topic from ${HEARTBEAT_HOME}/current_topic.json:
 
 This gives you: `repo`, `task`, `why`, `size` (small/medium/large), and optionally `existing_pr` (if this is a follow-up to an existing PR).
 
-You have a 30-minute budget for this topic. Scope your work to fit:
-- **small**: stay tight and focused; don't expand scope.
-- **medium**: thoughtful but bounded; resist detours.
-- **large**: may touch multiple files and involve real design, but still must fit the budget. If the work turns out to be bigger than expected, land what you have as a coherent first step rather than leaving it half-done.
+Your time budget depends on topic size — small and medium get 30 minutes, large gets 60 minutes. Use the time well:
+- **small**: stay tight and focused; don't expand scope. But do it properly — check for edge cases, make sure tests pass.
+- **medium**: thoughtful and bounded. Read the surrounding code to understand context before making changes. Write or update tests. Resist detours, but don't cut corners.
+- **large**: you have a full hour. Spend real time on design before writing code. Read related modules, understand the abstractions in play, then implement carefully. Write tests. Handle edge cases. If the work turns out to be bigger than expected, land what you have as a coherent, well-tested first step rather than leaving it half-done.
 
 ---
 
 ## Do the work
 
-1. If `existing_pr` is set: check out the existing branch (`git -C ${WORKSPACE}/REPO checkout claude/EXISTING-SLUG`) and skip to step 2. Otherwise: create a branch (`git -C ${WORKSPACE}/REPO checkout -b claude/SHORT-SLUG`).
+1. If `existing_pr` is set:
+   - **Read the full PR conversation first.** This is critical — you must understand everything that's been said before making changes:
+     `gh pr view NUMBER --repo ${GITHUB_ORG}/REPO --json body,comments,reviews --jq '{body: .body, comments: [.comments[] | {author: .author.login, body: .body}], reviews: [.reviews[] | {author: .author.login, state: .state, body: .body}]}'`
+     Also read inline review comments:
+     `gh api repos/${GITHUB_ORG}/REPO/pulls/NUMBER/comments --jq '.[] | {path: .path, line: .diff_hunk, body: .body, author: .user.login}'`
+   - Understand what feedback has been given, what's already been addressed, and what's still outstanding before touching any code.
+   - Check out the existing branch: `git -C ${WORKSPACE}/REPO checkout claude/EXISTING-SLUG`
+   - Skip to step 2.
+   Otherwise: create a branch (`git -C ${WORKSPACE}/REPO checkout -b claude/SHORT-SLUG`).
 2. Do the work using your tools (edit files, run tests if possible, etc.)
 3. **Update the changelog if it exists and the change is user-facing.** Check for CHANGELOG.md or CHANGELOG. If present and the change adds, removes, or modifies user-visible behaviour, add an entry under `## Unreleased` (create it if missing). Doc-only or internal refactors don't need a changelog entry.
 4. **Run CI checks before committing.**
@@ -34,7 +42,7 @@ You have a 30-minute budget for this topic. Scope your work to fit:
    Do not add a Co-Authored-By trailer.
 6. Push:
    `git -C ${WORKSPACE}/REPO push https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_ORG}/REPO.git HEAD:claude/SHORT-SLUG --set-upstream`
-7. If `existing_pr` is set: leave a comment summarising what was addressed: `gh pr comment NUMBER --repo ${GITHUB_ORG}/REPO --body "..."`. If new work: open a PR with `gh pr create --repo ${GITHUB_ORG}/REPO --title "..." --body "..."`. Mark as draft if the change is non-trivial. Body should explain what changed and why. Always end the PR body with: `---\n_Opened by the ${GITHUB_ORG} heartbeat agent (Claude). ${OWNER_NAME} has not reviewed this yet._`
+7. If `existing_pr` is set: leave a comment summarising what was addressed, referencing the specific feedback points by who said what: `gh pr comment NUMBER --repo ${GITHUB_ORG}/REPO --body "..."`. If new work: open a PR with `gh pr create --repo ${GITHUB_ORG}/REPO --title "..." --body "..."`. Mark as draft if the change is non-trivial. Body should explain what changed and why. Always end the PR body with: `---\n_Opened by the ${GITHUB_ORG} heartbeat agent (Claude). ${OWNER_NAME} has not reviewed this yet._`
 8. Check out main: `git -C ${WORKSPACE}/REPO checkout main`
 9. If the repo uses Rust, clean build artifacts: `~/.cargo/bin/cargo clean --manifest-path ${WORKSPACE}/REPO/Cargo.toml`
 
