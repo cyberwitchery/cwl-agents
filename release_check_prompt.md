@@ -7,7 +7,7 @@ You run periodically (every few days).
 ## PHASE 0: Auth
 
 Mint a GitHub App installation token for this run (using the heartbeat bot, which has Issues R/W):
-`export GH_TOKEN=$(${HEARTBEAT_HOME}/get-github-app-token heartbeat)`
+`export GH_TOKEN=$(${SCRIPTS_DIR}/get-github-app-token heartbeat)`
 
 ---
 

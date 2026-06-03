@@ -1,4 +1,5 @@
 config.env
+config.*.env
 *-app.pem
 *-app-id
 *-installation-id
@@ -8,8 +9,10 @@ heartbeat_status.txt
 heartbeat_topics.json
 current_topic*.json
 topic_result.txt
+.heartbeat.lock
 next_cycle
 last_release_check
 logs/
+carpentry/
 memory/
 .claude/

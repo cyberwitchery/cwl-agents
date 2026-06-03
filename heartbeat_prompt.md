@@ -7,7 +7,7 @@ You are the ${GITHUB_ORG} heartbeat agent — a cyclical contributor to the ${GI
 Log start: `date '+[%H:%M] Starting heartbeat cycle...' >> ${HEARTBEAT_HOME}/heartbeat_status.txt`
 
 Mint a GitHub App installation token for this run:
-`export GH_TOKEN=$(${HEARTBEAT_HOME}/get-github-app-token heartbeat)`
+`export GH_TOKEN=$(${SCRIPTS_DIR}/get-github-app-token heartbeat)`
 
 ---
 
@@ -98,7 +98,7 @@ For each topic (index 0 to N-1):
    `echo "[$(date +%H:%M)] Topic N/TOTAL (SIZE): REPO — TASK" >> ${HEARTBEAT_HOME}/heartbeat_status.txt`
 
 3. Run the topic in its own claude session. Use a size-dependent timeout — 30 minutes for small/medium, 60 minutes for large:
-   `timeout SECONDS /usr/local/bin/claude --dangerously-skip-permissions --model opus --effort max -p "$(envsubst < ${HEARTBEAT_HOME}/heartbeat_topic_prompt.md)"`
+   `timeout SECONDS /usr/local/bin/claude --dangerously-skip-permissions --model opus --effort max -p "$(envsubst '$GITHUB_ORG $WORKSPACE $HEARTBEAT_HOME $SCRIPTS_DIR $LANG_GUIDE $BOT_NAME $BOT_EMAIL $NOTIFY_TO $NOTIFY_FROM $OWNER_NAME' < ${SCRIPTS_DIR}/heartbeat_topic_prompt.md)"`
    where SECONDS is 1800 for small/medium or 3600 for large. If it times out (exit code 124), write `echo "skipped: timed out" > ${HEARTBEAT_HOME}/topic_result.txt`.
 
 4. Log the result:
