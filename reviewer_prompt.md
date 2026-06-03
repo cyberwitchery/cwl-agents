@@ -139,4 +139,8 @@ Anything needing your attention is marked "revise" or "closed".
 
 Only include the PRs from today's heartbeat run. Do not repeat PRs from previous days.
 
-Then stop.
+**Finish (required):** after everything above is done, your final action must be to run exactly this command:
+
+`touch ${HEARTBEAT_HOME}/.agent_done`
+
+The runner watches for that file to know you have finished and to close the session; until it appears (or a timeout) the session is held open, so do not skip it. Then stop.

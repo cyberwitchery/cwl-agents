@@ -10,6 +10,10 @@ heartbeat_topics.json
 current_topic*.json
 topic_result.txt
 .heartbeat.lock
+.agent_done
+.topic_prompt_expanded.md
+.prompt-*
+.done-*
 next_cycle
 last_release_check
 logs/
