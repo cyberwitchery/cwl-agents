@@ -101,7 +101,7 @@ For each topic (index 0 to N-1):
    First, expand the topic prompt to a temp file:
    `envsubst '$GITHUB_ORG $WORKSPACE $HEARTBEAT_HOME $SCRIPTS_DIR $LANG_GUIDE $BOT_NAME $BOT_EMAIL $NOTIFY_TO $NOTIFY_FROM $OWNER_NAME' < ${SCRIPTS_DIR}/heartbeat_topic_prompt.md > ${HEARTBEAT_HOME}/.topic_prompt_expanded.md`
    Then launch interactively (do NOT use -p):
-   `timeout SECONDS /usr/local/bin/claude --dangerously-skip-permissions --model opus --effort max --append-system-prompt-file ${HEARTBEAT_HOME}/.topic_prompt_expanded.md "Begin."`
+   `timeout SECONDS ${CLAUDE_BIN} --dangerously-skip-permissions --model opus --effort max --append-system-prompt-file ${HEARTBEAT_HOME}/.topic_prompt_expanded.md "Begin."`
    where SECONDS is 1800 for small/medium or 3600 for large. If it times out (exit code 124), write `echo "skipped: timed out" > ${HEARTBEAT_HOME}/topic_result.txt`.
 
 4. Log the result:
@@ -128,4 +128,8 @@ Overwrite ${HEARTBEAT_HOME}/heartbeat.md with:
 
 Then run: `date '+[%H:%M] Heartbeat cycle complete.' >> ${HEARTBEAT_HOME}/heartbeat_status.txt`
 
-Then stop.
+**Finish (required):** after everything above is done, your final action must be to run exactly this command:
+
+`touch ${HEARTBEAT_HOME}/.agent_done`
+
+The runner watches for that file to know you have finished and to close the session; until it appears (or a timeout) the session is held open, so do not skip it. Then stop.
