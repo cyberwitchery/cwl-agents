@@ -128,4 +128,8 @@ Overwrite ${HEARTBEAT_HOME}/heartbeat.md with:
 
 Then run: `date '+[%H:%M] Heartbeat cycle complete.' >> ${HEARTBEAT_HOME}/heartbeat_status.txt`
 
-Then stop.
+**Finish (required):** after everything above is done, your final action must be to run exactly this command:
+
+`touch ${HEARTBEAT_HOME}/.agent_done`
+
+The runner watches for that file to know you have finished and to close the session; until it appears (or a timeout) the session is held open, so do not skip it. Then stop.
