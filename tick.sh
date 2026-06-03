@@ -9,38 +9,115 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG="${1:-$SCRIPT_DIR/config.env}"
 set -a
-source "$SCRIPT_DIR/config.env"
+source "$CONFIG"
 set +a
 
-STATE_FILE="$HEARTBEAT_HOME/next_cycle"
-LOCK_FILE="/tmp/heartbeat-${GITHUB_ORG}.lock"
-LOG="$HEARTBEAT_HOME/heartbeat.log"
-LOG_DIR="$HEARTBEAT_HOME/logs"
+SCRIPTS_DIR="${SCRIPTS_DIR:-$SCRIPT_DIR}"
+STATE_DIR="${STATE_DIR:-$HEARTBEAT_HOME}"
+STATE_FILE="$STATE_DIR/next_cycle"
+LOCK_FILE="$STATE_DIR/.heartbeat.lock"
+LOG="$STATE_DIR/heartbeat.log"
+LOG_DIR="$STATE_DIR/logs"
 mkdir -p "$LOG_DIR"
 
 CYCLE_TS=$(date '+%Y-%m-%dT%H:%M')
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
-# Run a claude agent. Args: <name> <prompt-file>
-# Logs PID, exit code, and duration to the tick log.
-# Full session output goes to a per-run file in $LOG_DIR.
+# Run a claude agent in interactive mode (avoids -p / Agent SDK billing).
+# Args: <name> <prompt-file>
+# Launches claude inside a tmux session with the expanded prompt loaded as
+# a system-prompt appendix and a short trigger message.  Polls the tmux pane
+# to detect when claude is idle (screen unchanged), then sends /exit.
+AGENT_TIMEOUT="${AGENT_TIMEOUT:-5400}"   # 90 min default
+IDLE_CHECKS="${IDLE_CHECKS:-6}"          # consecutive unchanged polls (× 15s = 90s)
+
 run_agent() {
     local name="$1" prompt_file="$2"
     local session_log="$LOG_DIR/${CYCLE_TS}-${name}.log"
     local prompt
     prompt="$(envsubst "$VARS" < "$prompt_file")"
+    local tmux_sess="hb-${name}-$$"
+    local prompt_tmp="$STATE_DIR/.prompt-${name}-$$"
+    local done_marker="$STATE_DIR/.done-${name}-$$"
 
-    log "$name: starting (pid will follow)"
-    /usr/local/bin/claude --dangerously-skip-permissions \
-        --model "$CLAUDE_MODEL" --effort "$CLAUDE_EFFORT" \
-        -p "$prompt" > "$session_log" 2>&1 &
-    local pid=$!
-    log "$name: pid $pid"
-    wait "$pid"
-    local rc=$?
-    log "$name: exited $rc ($(wc -l < "$session_log") lines of output)"
+    log "$name: starting (interactive/tmux)"
+
+    printf '%s' "$prompt" > "$prompt_tmp"
+    rm -f "$done_marker"
+
+    # Launch claude interactively inside tmux.
+    # script(1) records raw terminal output; done_marker signals process exit.
+    # Export config vars into the tmux session so they're available to
+    # commands the agent runs (e.g. get-github-app-token reads HEARTBEAT_HOME).
+    local env_setup=""
+    local var
+    for var in HEARTBEAT_HOME SCRIPTS_DIR WORKSPACE GITHUB_ORG STATE_DIR \
+               BOT_NAME BOT_EMAIL NOTIFY_TO NOTIFY_FROM OWNER_NAME \
+               CLAUDE_MODEL CLAUDE_EFFORT PATH HOME; do
+        env_setup+="export ${var}='${!var}'; "
+    done
+
+    tmux new-session -d -s "$tmux_sess" -x 200 -y 50 -c "$HEARTBEAT_HOME" \
+        "${env_setup} script -qf '$session_log' -c '/usr/local/bin/claude \
+            --dangerously-skip-permissions \
+            --model $CLAUDE_MODEL --effort $CLAUDE_EFFORT \
+            --append-system-prompt-file $prompt_tmp \
+            \"Begin.\"' ; touch '$done_marker'"
+
+    log "$name: tmux session $tmux_sess"
+
+    # Poll until idle or timeout.
+    # "Idle" means the pane hasn't changed AND there are no background tasks
+    # still running (subagents, shells, etc.).
+    local elapsed=0 prev_hash="" idle_streak=0
+    while [ "$elapsed" -lt "$AGENT_TIMEOUT" ] && [ ! -f "$done_marker" ]; do
+        sleep 15
+        elapsed=$((elapsed + 15))
+
+        local pane
+        pane=$(tmux capture-pane -t "$tmux_sess" -p 2>/dev/null || true)
+        local cur_hash
+        cur_hash=$(printf '%s' "$pane" | md5sum | cut -d' ' -f1)
+
+        if [ "$cur_hash" = "$prev_hash" ]; then
+            # Screen unchanged — but check for background activity.
+            # Match the task-list status line ("N in progress") or the
+            # shell count indicator ("N shells") — not stale tool labels
+            # like "Running…" that linger in scrollback.
+            if printf '%s' "$pane" | grep -qE '[0-9]+ in progress|[0-9]+ shells'; then
+                idle_streak=0  # work still happening
+            else
+                idle_streak=$((idle_streak + 1))
+            fi
+        else
+            idle_streak=0
+            prev_hash="$cur_hash"
+        fi
+
+        if [ "$idle_streak" -ge "$IDLE_CHECKS" ]; then
+            log "$name: idle detected after ${elapsed}s, sending /exit"
+            tmux send-keys -t "$tmux_sess" Escape
+            sleep 0.1
+            tmux send-keys -t "$tmux_sess" "/exit" Enter 2>/dev/null || true
+            local ew=0
+            while [ "$ew" -lt 15 ] && [ ! -f "$done_marker" ]; do
+                sleep 1; ew=$((ew + 1))
+            done
+            break
+        fi
+    done
+
+    if [ "$elapsed" -ge "$AGENT_TIMEOUT" ] && [ ! -f "$done_marker" ]; then
+        log "$name: timeout after ${AGENT_TIMEOUT}s, killing"
+    fi
+
+    tmux kill-session -t "$tmux_sess" 2>/dev/null || true
+    rm -f "$prompt_tmp" "$done_marker"
+
+    log "$name: finished (${elapsed}s, $(wc -l < "$session_log" 2>/dev/null || echo 0) lines)"
     return 0
 }
 
@@ -57,7 +134,7 @@ fi
 
 if [ -n "${USAGE_CHECK_CMD:-}" ]; then
     DELTA=$($USAGE_CHECK_CMD 2>/dev/null || true)
-    if [ -n "${DELTA:-}" ] && python3 -c "import sys; sys.exit(0 if float('$DELTA') > $PACE_THRESHOLD else 1)" 2>/dev/null; then
+    if [ -n "${DELTA:-}" ] && printf '%f' "$DELTA" >/dev/null 2>&1 && python3 -c "import sys; sys.exit(0 if float(sys.argv[1]) > float(sys.argv[2]) else 1)" "$DELTA" "$PACE_THRESHOLD" 2>/dev/null; then
         log "tick: pace hot (delta=$DELTA), reschedule 1h"
         echo $((NOW + 3600)) > "$STATE_FILE"
         exit 0
@@ -66,20 +143,28 @@ fi
 
 log "tick: starting cycle (delta=${DELTA:-n/a})"
 
-VARS='$GITHUB_ORG $WORKSPACE $HEARTBEAT_HOME $BOT_NAME $BOT_EMAIL $NOTIFY_TO $NOTIFY_FROM $OWNER_NAME'
+LANG_GUIDE_FILE="$SCRIPTS_DIR/lang-guide-${GITHUB_ORG}.md"
+if [ -f "$LANG_GUIDE_FILE" ]; then
+    LANG_GUIDE="$(cat "$LANG_GUIDE_FILE")"
+else
+    LANG_GUIDE=""
+fi
+export LANG_GUIDE
 
-run_agent heartbeat "$HEARTBEAT_HOME/heartbeat_prompt.md"
-run_agent reviewer "$HEARTBEAT_HOME/reviewer_prompt.md"
+VARS='$GITHUB_ORG $WORKSPACE $HEARTBEAT_HOME $SCRIPTS_DIR $LANG_GUIDE $BOT_NAME $BOT_EMAIL $NOTIFY_TO $NOTIFY_FROM $OWNER_NAME'
+
+run_agent heartbeat "$SCRIPTS_DIR/heartbeat_prompt.md"
+run_agent reviewer "$SCRIPTS_DIR/reviewer_prompt.md"
 
 # Release check on interval.
-RELEASE_STATE="$HEARTBEAT_HOME/last_release_check"
+RELEASE_STATE="$STATE_DIR/last_release_check"
 LAST_RELEASE=$(cat "$RELEASE_STATE" 2>/dev/null || echo 0)
 if [ $(($(date +%s) - LAST_RELEASE)) -ge "$RELEASE_CHECK_INTERVAL" ]; then
-    run_agent release-check "$HEARTBEAT_HOME/release_check_prompt.md"
+    run_agent release-check "$SCRIPTS_DIR/release_check_prompt.md"
     date +%s > "$RELEASE_STATE"
 fi
 
 # Schedule next cycle.
 OFFSET=$((CYCLE_MIN_SECONDS + RANDOM % CYCLE_JITTER_SECONDS))
-echo $(($(date +%s) + OFFSET)) > "$STATE_FILE"
+echo $(($(date +%s) + OFFSET)) > "$STATE_DIR/next_cycle"
 log "tick: cycle done, next in $((OFFSET/60))min"
