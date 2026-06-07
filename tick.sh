@@ -26,6 +26,30 @@ LOG="$STATE_DIR/heartbeat.log"
 LOG_DIR="$STATE_DIR/logs"
 mkdir -p "$LOG_DIR"
 
+# Credential isolation: agents (and their topic sub-sessions) must use ONLY the
+# minted GH_TOKEN for gh/git, never the machine owner's personal gh login or
+# stored git creds. A dedicated empty GH_CONFIG_DIR removes gh's fallback login;
+# a private GIT_CONFIG_GLOBAL gives github.com a credential helper that emits only
+# x-access-token:$GH_TOKEN — so a missing/expired token fails LOUDLY instead of
+# silently acting as the owner — and pins bot commit identity. Fixes the incident
+# where an empty token made the bot comment + delete a comment as the owner.
+export GH_CONFIG_DIR="$STATE_DIR/.agent-ghcfg"
+export GIT_CONFIG_GLOBAL="$STATE_DIR/.agent-gitconfig"
+export GIT_CONFIG_SYSTEM=/dev/null
+export GIT_TERMINAL_PROMPT=0
+mkdir -p "$GH_CONFIG_DIR"
+: > "$GIT_CONFIG_GLOBAL"
+git config -f "$GIT_CONFIG_GLOBAL" user.name "$BOT_NAME"
+git config -f "$GIT_CONFIG_GLOBAL" user.email "$BOT_EMAIL"
+cat >> "$GIT_CONFIG_GLOBAL" <<'GITCFG'
+[credential "https://github.com"]
+	helper = ""
+	helper = "!f() { test \"$1\" = get && printf 'username=x-access-token\npassword=%s\n' \"$GH_TOKEN\"; }; f"
+[credential "https://gist.github.com"]
+	helper = ""
+	helper = "!f() { test \"$1\" = get && printf 'username=x-access-token\npassword=%s\n' \"$GH_TOKEN\"; }; f"
+GITCFG
+
 CYCLE_TS=$(date '+%Y-%m-%dT%H:%M')
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
@@ -64,7 +88,8 @@ run_agent() {
     local var
     for var in HEARTBEAT_HOME SCRIPTS_DIR WORKSPACE GITHUB_ORG STATE_DIR \
                BOT_NAME BOT_EMAIL NOTIFY_TO NOTIFY_FROM OWNER_NAME \
-               CLAUDE_MODEL CLAUDE_EFFORT PATH HOME; do
+               CLAUDE_MODEL CLAUDE_EFFORT PATH HOME \
+               GH_CONFIG_DIR GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_TERMINAL_PROMPT; do
         env_setup+="export ${var}='${!var}'; "
     done
 
