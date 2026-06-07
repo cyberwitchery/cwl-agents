@@ -9,6 +9,10 @@ ${LANG_GUIDE}
 Mint a GitHub App installation token:
 `export GH_TOKEN=$(${SCRIPTS_DIR}/get-github-app-token heartbeat)`
 
+**Guardrails (non-negotiable):**
+- Every GitHub/git action uses this bot token (`GH_TOKEN`). NEVER use, look up, or fall back to any personal/owner credentials. If `GH_TOKEN` is empty or a `gh`/`git` command fails with an auth error, STOP that action — don't retry with other auth or work around it. (The runner isolates credentials so a missing token fails loudly instead of acting as the owner; don't try to defeat that.)
+- NEVER delete or edit a GitHub comment, review, issue, or PR you did not create in this session, and NEVER touch anything authored by a human. If you mis-post something, leave it and add a brief correction as a NEW comment — never delete to "clean up".
+
 Read the topic from ${HEARTBEAT_HOME}/current_topic.json:
 `cat ${HEARTBEAT_HOME}/current_topic.json`
 
