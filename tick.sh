@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Heartbeat tick — runs every 30min via cron, decides whether to start a new cycle.
+# heartbeat tick — runs every 30min via cron, decides whether to start a new cycle.
 #
-# State: $HEARTBEAT_HOME/next_cycle holds the unix timestamp of the next eligible cycle.
-# If not yet reached, exit. If the optional usage check says we're burning too fast,
-# skip and reschedule 1h out. Otherwise: run heartbeat, run reviewer, schedule next
+# state: $HEARTBEAT_HOME/next_cycle holds the unix timestamp of the next eligible cycle.
+# if not yet reached, exit. if the optional usage check says we're burning too fast,
+# skip and reschedule 1h out. otherwise: run heartbeat, run reviewer, schedule next
 # cycle.
 
 set -euo pipefail
@@ -16,8 +16,8 @@ set +a
 
 SCRIPTS_DIR="${SCRIPTS_DIR:-$SCRIPT_DIR}"
 STATE_DIR="${STATE_DIR:-$HEARTBEAT_HOME}"
-# Resolve the claude binary from PATH (override with CLAUDE_BIN in config.env).
-# Exported + in VARS so prompts can reference ${CLAUDE_BIN} (the orchestrator
+# resolve the claude binary from PATH (override with CLAUDE_BIN in config.env).
+# exported + in VARS so prompts can reference ${CLAUDE_BIN} (the orchestrator
 # launches topic workers from inside heartbeat_prompt.md).
 export CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || echo /usr/local/bin/claude)}"
 STATE_FILE="$STATE_DIR/next_cycle"
@@ -26,12 +26,12 @@ LOG="$STATE_DIR/heartbeat.log"
 LOG_DIR="$STATE_DIR/logs"
 mkdir -p "$LOG_DIR"
 
-# Credential isolation: agents (and their topic sub-sessions) must use ONLY the
+# credential isolation: agents (and their topic sub-sessions) must use ONLY the
 # minted GH_TOKEN for gh/git, never the machine owner's personal gh login or
-# stored git creds. A dedicated empty GH_CONFIG_DIR removes gh's fallback login;
+# stored git creds. a dedicated empty GH_CONFIG_DIR removes gh's fallback login;
 # a private GIT_CONFIG_GLOBAL gives github.com a credential helper that emits only
 # x-access-token:$GH_TOKEN — so a missing/expired token fails LOUDLY instead of
-# silently acting as the owner — and pins bot commit identity. Fixes the incident
+# silently acting as the owner — and pins bot commit identity. fixes the incident
 # where an empty token made the bot comment + delete a comment as the owner.
 export GH_CONFIG_DIR="$STATE_DIR/.agent-ghcfg"
 export GIT_CONFIG_GLOBAL="$STATE_DIR/.agent-gitconfig"
@@ -54,12 +54,12 @@ CYCLE_TS=$(date '+%Y-%m-%dT%H:%M')
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
-# Run a claude agent in interactive mode (keeps usage on the subscription
-# plan, not the Agent SDK credit). Args: <name> <prompt-file>
-# Launches claude in a tmux session with the expanded prompt as a system-prompt
-# appendix. An interactive session never exits on its own, so the agent is told
+# run a claude agent in interactive mode (keeps usage on the subscription
+# plan, not the Agent SDK credit). args: <name> <prompt-file>
+# launches claude in a tmux session with the expanded prompt as a system-prompt
+# appendix. an interactive session never exits on its own, so the agent is told
 # (in its prompt) to `touch $HEARTBEAT_HOME/.agent_done` as its very last
-# action; we poll for that marker file and then send /exit. We use a FILE, not
+# action; we poll for that marker file and then send /exit. we use a FILE, not
 # an on-screen sentinel: the TUI rewrites text with layout escapes (it can split
 # a string mid-line), so scraping the session log/pane is unreliable.
 # AGENT_TIMEOUT is the hard backstop if the marker never appears.
@@ -80,9 +80,9 @@ run_agent() {
     printf '%s' "$prompt" > "$prompt_tmp"
     rm -f "$done_marker" "$ready_marker"
 
-    # Launch claude interactively inside tmux.
+    # launch claude interactively inside tmux.
     # script(1) records raw terminal output; done_marker signals process exit.
-    # Export config vars into the tmux session so they're available to
+    # export config vars into the tmux session so they're available to
     # commands the agent runs (e.g. get-github-app-token reads HEARTBEAT_HOME).
     local env_setup=""
     local var
@@ -93,7 +93,7 @@ run_agent() {
         env_setup+="export ${var}='${!var}'; "
     done
 
-    # Record the session with a pty via script(1). BSD script (macOS) takes the
+    # record the session with a pty via script(1). BSD script (macOS) takes the
     # command as positional args; util-linux (Linux) needs `-c "CMD"`.
     local claude_cmd="$CLAUDE_BIN --dangerously-skip-permissions --model $CLAUDE_MODEL --effort $CLAUDE_EFFORT --append-system-prompt-file '$prompt_tmp' 'Begin.'"
     local rec
@@ -107,8 +107,8 @@ run_agent() {
 
     log "$name: tmux session $tmux_sess"
 
-    # Poll for the agent's done marker; send /exit when it appears. Backstop:
-    # AGENT_TIMEOUT. The agent process exiting (done_marker) also ends the loop,
+    # poll for the agent's done marker; send /exit when it appears. backstop:
+    # AGENT_TIMEOUT. the agent process exiting (done_marker) also ends the loop,
     # in case it exits without us sending /exit.
     local elapsed=0
     while [ "$elapsed" -lt "$AGENT_TIMEOUT" ] && [ ! -f "$done_marker" ]; do
@@ -139,7 +139,7 @@ run_agent() {
     return 0
 }
 
-# Only one instance at a time. Portable mkdir lock with a PID liveness check
+# only one instance at a time. portable mkdir lock with a PID liveness check
 # (no flock on macOS; this also self-heals a stale lock left by a killed run).
 if ! mkdir "$LOCK_FILE" 2>/dev/null; then
     OLDPID=$(cat "$LOCK_FILE/pid" 2>/dev/null || echo "")
@@ -183,7 +183,7 @@ VARS='$GITHUB_ORG $WORKSPACE $HEARTBEAT_HOME $SCRIPTS_DIR $CLAUDE_BIN $LANG_GUID
 run_agent heartbeat "$SCRIPTS_DIR/heartbeat_prompt.md"
 run_agent reviewer "$SCRIPTS_DIR/reviewer_prompt.md"
 
-# Release check on interval.
+# release check on interval.
 RELEASE_STATE="$STATE_DIR/last_release_check"
 LAST_RELEASE=$(cat "$RELEASE_STATE" 2>/dev/null || echo 0)
 if [ $(($(date +%s) - LAST_RELEASE)) -ge "$RELEASE_CHECK_INTERVAL" ]; then
@@ -191,7 +191,7 @@ if [ $(($(date +%s) - LAST_RELEASE)) -ge "$RELEASE_CHECK_INTERVAL" ]; then
     date +%s > "$RELEASE_STATE"
 fi
 
-# Schedule next cycle.
+# schedule next cycle.
 OFFSET=$((CYCLE_MIN_SECONDS + RANDOM % CYCLE_JITTER_SECONDS))
 echo $(($(date +%s) + OFFSET)) > "$STATE_DIR/next_cycle"
 log "tick: cycle done, next in $((OFFSET/60))min"

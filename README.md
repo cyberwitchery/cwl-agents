@@ -1,8 +1,8 @@
-# Heartbeat
+# heartbeat
 
-A cyclical autonomous agent that contributes to a GitHub org using [Claude Code](https://docs.anthropic.com/en/docs/claude-code). It runs several times per day, each cycle opening a small slate of PRs — 2 small, 2 medium, 1 large — then reviewing them.
+a cyclical autonomous agent that contributes to a GitHub org using [Claude Code](https://docs.anthropic.com/en/docs/claude-code). it runs several times per day, each cycle opening a small slate of PRs — 2 small, 2 medium, 1 large — then reviewing them.
 
-## Architecture
+## architecture
 
 ```
 cron (every 30min)
@@ -17,30 +17,30 @@ cron (every 30min)
        └─ release_check_prompt.md      (every N days) opens "Publish vX.Y.Z" issues
 ```
 
-Each topic runs in its own Claude session so a runaway implementation can't take down the cycle.
+each topic runs in its own Claude session so a runaway implementation can't take down the cycle.
 
-## Setup
+## setup
 
-### 1. Create two GitHub Apps
+### 1. create two GitHub Apps
 
-You need two apps installed on your org:
+you need two apps installed on your org:
 
-**Heartbeat** (the contributor):
+**heartbeat** (the contributor):
 - Repository permissions: Contents (Read & Write), Pull requests (Read & Write), Issues (Read & Write), Workflows (Read & Write), Metadata (Read)
 
-**Reviewer** (the reviewer):
+**reviewer** (the reviewer):
 - Repository permissions: Pull requests (Read & Write), Metadata (Read)
 
-For each app, download the private key and note the App ID and Installation ID.
+for each app, download the private key and note the App ID and Installation ID.
 
-### 2. Configure
+### 2. configure
 
 ```bash
 cp config.env.example config.env
 # Edit config.env with your org, emails, paths, etc.
 ```
 
-Place credential files in the same directory as the prompts (`$HEARTBEAT_HOME`):
+place credential files in the same directory as the prompts (`$HEARTBEAT_HOME`):
 
 ```
 heartbeat-app.pem
@@ -51,7 +51,7 @@ reviewer-app-id
 reviewer-installation-id
 ```
 
-### 3. Clone your org's repos
+### 3. clone your org's repos
 
 ```bash
 mkdir -p "$WORKSPACE"
@@ -60,38 +60,38 @@ gh repo list "$GITHUB_ORG" --limit 50 --json name -q '.[].name' | while read -r 
 done
 ```
 
-The heartbeat agent will keep these in sync on each cycle.
+the heartbeat agent will keep these in sync on each cycle.
 
-### 4. Set up cron
+### 4. set up cron
 
 ```cron
 @reboot  /path/to/tick.sh
 */30 * * * * /path/to/tick.sh
 ```
 
-If your usage check command needs access to a keyring or session bus, export `DBUS_SESSION_BUS_ADDRESS` above the cron entries.
+if your usage check command needs access to a keyring or session bus, export `DBUS_SESSION_BUS_ADDRESS` above the cron entries.
 
-### 5. Email (optional)
+### 5. email (optional)
 
-If `NOTIFY_TO` is set in `config.env`, the reviewer sends a summary email via `msmtp` after each cycle. Configure `~/.msmtprc` with your SMTP provider.
+if `NOTIFY_TO` is set in `config.env`, the reviewer sends a summary email via `msmtp` after each cycle. configure `~/.msmtprc` with your SMTP provider.
 
-## Files
+## files
 
-| File | Purpose |
+| file | purpose |
 |------|---------|
-| `tick.sh` | Cron entry point — decides when to run, invokes agents |
-| `get-github-app-token` | Mints short-lived GitHub App installation tokens |
-| `heartbeat_prompt.md` | Orchestrator: syncs repos, picks topics, spawns workers |
-| `heartbeat_topic_prompt.md` | Worker: implements one topic, opens/updates a PR |
-| `reviewer_prompt.md` | Reviewer: diffs each PR, leaves a verdict, sends email |
-| `release_check_prompt.md` | Release checker: opens "Publish vX.Y.Z" issues |
-| `config.env.example` | Template for all configuration |
-| `config.env` | Your actual config (gitignored) |
+| `tick.sh` | cron entry point — decides when to run, invokes agents |
+| `get-github-app-token` | mints short-lived GitHub App installation tokens |
+| `heartbeat_prompt.md` | orchestrator: syncs repos, picks topics, spawns workers |
+| `heartbeat_topic_prompt.md` | worker: implements one topic, opens/updates a PR |
+| `reviewer_prompt.md` | reviewer: diffs each PR, leaves a verdict, sends email |
+| `release_check_prompt.md` | release checker: opens "Publish vX.Y.Z" issues |
+| `config.env.example` | template for all configuration |
+| `config.env` | your actual config (gitignored) |
 
-## Usage check
+## usage check
 
-The optional `USAGE_CHECK_CMD` in `config.env` lets you gate cycles on API usage. The command should print a number to stdout. If the number exceeds `PACE_THRESHOLD`, the cycle is skipped and rescheduled 1 hour out. This is useful for staying within rate limits on plans with usage caps.
+the optional `USAGE_CHECK_CMD` in `config.env` lets you gate cycles on API usage. the command should print a number to stdout. if the number exceeds `PACE_THRESHOLD`, the cycle is skipped and rescheduled 1 hour out. this is useful for staying within rate limits on plans with usage caps.
 
-## License
+## license
 
 MIT
