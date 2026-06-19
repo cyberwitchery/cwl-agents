@@ -58,6 +58,8 @@ unaddressed review feedback pre-empts new work.
 - recent commits: `git -C ${WORKSPACE}/REPO log --oneline -10` — gives you a sense of what's active.
 - open PRs (avoid duplicating): `gh pr list --repo ${GITHUB_ORG}/REPO --state open --json number,title,headRefName`
 - closed `claude/*` PRs (avoid re-attempting rejected work): `gh pr list --repo ${GITHUB_ORG}/REPO --state closed --json number,title,headRefName,closedAt --jq '[.[] | select(.headRefName | startswith("claude/"))]'`
+  for each closed PR, read why it was closed: `gh pr view NUMBER --repo ${GITHUB_ORG}/REPO --json body,comments,reviews,closedAt --jq '{title: .title, comments: [.comments[] | {author: .author.login, body: .body}], reviews: [.reviews[] | {author: .author.login, state: .state, body: .body}]}'`
+  **do not re-propose work that was closed or rejected.** if a feature, refactor, or idea was previously closed, it is off-limits unless the close comments explicitly say "try again with X approach." repeated proposals of rejected work waste everyone's time.
 
 when reading code critically, look for:
 - functions with obvious performance issues (unnecessary clones, O(n²) loops, missing memoization)

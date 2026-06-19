@@ -37,6 +37,7 @@ Your time budget depends on topic size — small and medium get 30 minutes, larg
    - Skip to step 2.
    Otherwise: create a branch (`git -C ${WORKSPACE}/REPO checkout -b claude/SHORT-SLUG`).
 2. Do the work using your tools (edit files, run tests if possible, etc.)
+   **Code comments:** match the project's existing style. Public API doc comments are fine but should focus on what the caller needs to know, not restate the signature. Do not add inline comments unless the logic is non-trivial or non-obvious. Never add comments that restate what the code does. When in doubt, leave the comment out.
 3. **Update the changelog if it exists and the change is user-facing.** Check for CHANGELOG.md or CHANGELOG. If present and the change adds, removes, or modifies user-visible behaviour, add an entry under `## Unreleased` (create it if missing). Doc-only or internal refactors don't need a changelog entry.
 4. **Run CI checks before committing.**
    - Carp: run `carp-fmt -c` on every `.carp` file you changed (if it fails, run `carp-fmt -w` on them first), then run `angler` on every `.carp` file you changed (if it reports findings and you can fix them, fix them; if a rule is wrong or irrelevant, skip it with `--disable`)
