@@ -31,8 +31,7 @@ mkdir -p "$LOG_DIR"
 # stored git creds. a dedicated empty GH_CONFIG_DIR removes gh's fallback login;
 # a private GIT_CONFIG_GLOBAL gives github.com a credential helper that emits only
 # x-access-token:$GH_TOKEN — so a missing/expired token fails LOUDLY instead of
-# silently acting as the owner — and pins bot commit identity. fixes the incident
-# where an empty token made the bot comment + delete a comment as the owner.
+# silently acting as the owner — and pins bot commit identity.
 export GH_CONFIG_DIR="$STATE_DIR/.agent-ghcfg"
 export GIT_CONFIG_GLOBAL="$STATE_DIR/.agent-gitconfig"
 export GIT_CONFIG_SYSTEM=/dev/null
