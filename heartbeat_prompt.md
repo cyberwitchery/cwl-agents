@@ -40,18 +40,16 @@ sizes are about scope and reasoning depth, not lines of code. a 20-line change t
 
 ### before picking: sweep
 
-**priority: your own open PRs with unaddressed feedback.** these are always worth doing and count toward your slate in the size bucket that fits the follow-up work.
-
-for each repo, find PRs on `claude/*` branches:
+**first: check for your own open PRs.** for each repo, find PRs on `claude/*` branches:
 `gh pr list --repo ${GITHUB_ORG}/REPO --state open --json number,title,headRefName,comments,reviews --jq '[.[] | select(.headRefName | startswith("claude/"))]'`
 
 for each, fetch comments and reviews:
 `gh api repos/${GITHUB_ORG}/REPO/pulls/NUMBER/comments`
 `gh api repos/${GITHUB_ORG}/REPO/pulls/NUMBER/reviews`
 
-unaddressed review feedback pre-empts new work.
+**if there are any open `claude/*` PRs, your entire slate must be follow-ups to those PRs.** only choose new work if there are no open PRs. no exceptions.
 
-**then sweep for new work.** for each repo, do the real investigation before committing to a topic:
+**then, only if there are no open PRs,** sweep for new work. for each repo, do the real investigation before committing to a topic:
 - open issues: `gh issue list --repo ${GITHUB_ORG}/REPO --state open --json number,title,createdAt,updatedAt,comments` — best source of large topics.
 - TODOs and FIXMEs: grep for them.
 - read key source files — not a skim, actually read them. features are usually not in issues; they're discoverable in the code.
